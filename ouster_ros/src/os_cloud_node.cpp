@@ -59,6 +59,9 @@ int main(int argc, char** argv) {
 
     ouster::ScanBatcher batch(W, pf);
 
+    // publish transforms
+    tf2_ros::StaticTransformBroadcaster tf_bcast;
+
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
         if (batch(pm.buf.data(), ls)) {
             auto h = std::find_if(
@@ -70,7 +73,13 @@ int main(int argc, char** argv) {
                 lidar_pub.publish(ouster_ros::cloud_to_cloud_msg(
                     cloud, h->timestamp, sensor_frame));
             }
-        }
+
+            tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
+            info.imu_to_sensor_transform, sensor_frame, imu_frame));
+
+            tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
+            info.lidar_to_sensor_transform, sensor_frame, lidar_frame));
+        }        
     };
 
     auto imu_handler = [&](const PacketMsg& p) {
@@ -82,16 +91,18 @@ int main(int argc, char** argv) {
     auto imu_packet_sub = nh.subscribe<PacketMsg, const PacketMsg&>(
         "imu_packets", 100, imu_handler);
 
-    // publish transforms
-    tf2_ros::StaticTransformBroadcaster tf_bcast{};
-
-    tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
-        info.imu_to_sensor_transform, sensor_frame, imu_frame));
-
-    tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
-        info.lidar_to_sensor_transform, sensor_frame, lidar_frame));
-
     ros::spin();
+    // ros::Rate r(10.0);
+    // while (ros::ok()) {
+    //     tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
+    //     info.imu_to_sensor_transform, sensor_frame, imu_frame));
+
+    //     tf_bcast.sendTransform(ouster_ros::transform_to_tf_msg(
+    //     info.lidar_to_sensor_transform, sensor_frame, lidar_frame));
+
+    //     ros::spinOnce();
+    //     r.sleep();
+    // } 
 
     return EXIT_SUCCESS;
 }
